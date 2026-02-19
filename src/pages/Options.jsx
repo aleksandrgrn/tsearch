@@ -80,6 +80,9 @@ class Options extends React.Component {
             <OptionCheckbox name={'requestQueryDescription'}/>
             <OptionCheckbox name={'singleResultTable'}/>
             <OptionCheckbox name={'doNotSendStatistics'}/>
+
+            <h2 className="page__title">{chrome.i18n.getMessage('advanced_options')}</h2>
+            <OptionCheckbox name={'debugDumps'}/>
           </div>
         );
         break;

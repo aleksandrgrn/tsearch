@@ -1166,6 +1166,10 @@ const api = {
       throw err;
     });
   },
+  setInfo: function (info) {
+    api.info = info;
+    return true;
+  },
   events: {}
 };
 const transport = new _tools_transport__WEBPACK_IMPORTED_MODULE_1__["default"]({
@@ -1231,6 +1235,10 @@ class BaseApi {
       });
     });
 
+    _defineProperty(this, "debugDump", payload => {
+      return this.transport.callFn('debugDump', [payload]);
+    });
+
     this.api = api;
     this.transport = transport;
     this.public = {
@@ -1241,7 +1249,8 @@ class BaseApi {
       API_getDoc: _tools_exKitGetDoc__WEBPACK_IMPORTED_MODULE_1__["default"],
       API_event: this.event,
       API_getInfo: this.getInfo,
-      API_request: this.request
+      API_request: this.request,
+      API_debugDump: this.debugDump
     };
   }
 

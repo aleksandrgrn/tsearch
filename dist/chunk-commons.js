@@ -4782,7 +4782,10 @@ const OptionsValueStore = mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].
     by: 'quality'
   }]),
   trackerListHeight: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].number, 200),
-  repositories: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].array(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].string), ['https://api.github.com/repos/feverqwe/tSearch/contents/external'])
+  repositories: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].array(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].string), ['https://api.github.com/repos/feverqwe/tSearch/contents/external']),
+  // Dev/diagnostic: enables extra tracker HTML dumps to DevTools.
+  // Keep disabled by default to avoid memory/console noise.
+  debugDumps: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].boolean, false)
 }).actions(self => {
   return {
     setValue(key, value) {
@@ -13204,6 +13207,34 @@ class ModuleWorker {
     this.api = {
       request: details => {
         return Object(_exKitRequest__WEBPACK_IMPORTED_MODULE_1__["default"])(this, details);
+      },
+      debugDump: payload => {
+        try {
+          if (!this.profileOptions || !this.profileOptions.debugDumps) {
+            return true;
+          }
+
+          if (typeof globalThis !== 'undefined') {
+            globalThis.__tsearchDebugHtml = globalThis.__tsearchDebugHtml || [];
+
+            globalThis.__tsearchDebugHtml.push({ ...payload,
+              timestamp: Date.now()
+            }); // Avoid unbounded growth in long sessions
+
+
+            const maxItems = 20;
+
+            if (globalThis.__tsearchDebugHtml.length > maxItems) {
+              globalThis.__tsearchDebugHtml.splice(0, globalThis.__tsearchDebugHtml.length - maxItems);
+            }
+          }
+
+          console.warn('[tsearch-debug] dump', payload);
+        } catch (err) {
+          console.warn('[tsearch-debug] debugDump handler error', err);
+        }
+
+        return true;
       }
     };
   }
@@ -13215,7 +13246,8 @@ class ModuleWorker {
       moduleId: module.id
     }, this.api);
     const info = {
-      locale: module.meta.locale
+      locale: module.meta.locale,
+      profileOptions: this.profileOptions || {}
     };
     return this.worker.callFn('init', [module.code, module.meta.require, info]).catch(err => {
       this.destroyWorker();
@@ -13224,7 +13256,18 @@ class ModuleWorker {
   }
 
   setProfileOptions(profileOptions) {
-    this.profileOptions = profileOptions || {};
+    this.profileOptions = profileOptions || {}; // If sandbox is already initialized, update its info dynamically,
+    // so diagnostic flags can be toggled without reloading worker.
+
+    try {
+      if (this.worker) {
+        this.worker.callFn('setInfo', [{
+          locale: this.module && this.module.meta ? this.module.meta.locale : undefined,
+          profileOptions: this.profileOptions || {}
+        }]);
+      }
+    } catch (err) {// ignore - info update is best-effort
+    }
   }
 
   callFn(event, args) {

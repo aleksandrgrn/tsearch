@@ -16,6 +16,7 @@ class BaseApi {
       API_event: this.event,
       API_getInfo: this.getInfo,
       API_request: this.request,
+      API_debugDump: this.debugDump,
     };
   }
 
@@ -41,6 +42,10 @@ class BaseApi {
 
       return response;
     });
+  };
+
+  debugDump = (payload) => {
+    return this.transport.callFn('debugDump', [payload]);
   };
 }
 

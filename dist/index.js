@@ -4514,7 +4514,17 @@ let Header = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_4__["inject"])('
     _defineProperty(this, "handleSubmit", query => {
       const location = '/search?' + qs.stringify({
         query: query
-      });
+      }); // Avoid history warning: "Hash history cannot PUSH the same path".
+      // When user submits the same query while already on the same /search route,
+      // we don't need to add a duplicate history entry.
+
+      const currentLocation = this.props.history && this.props.history.location;
+      const currentPath = currentLocation ? `${currentLocation.pathname || ''}${currentLocation.search || ''}` : null;
+
+      if (currentPath === location) {
+        return;
+      }
+
       this.props.history.push(location);
     });
 
@@ -6750,7 +6760,10 @@ let Tracker = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_0__["inject"])(
 
   componentDidMount() {
     this.trackerStore.attach();
-    this.trackerStore.setProfileOptions(this.profileTrackerStore.options);
+    const globalOptions = this.rootStore && this.rootStore.options && this.rootStore.options.options;
+    this.trackerStore.setProfileOptions({ ...this.profileTrackerStore.options,
+      debugDumps: !!(globalOptions && globalOptions.debugDumps)
+    });
   }
 
   componentWillUnmount() {

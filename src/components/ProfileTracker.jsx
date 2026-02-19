@@ -81,7 +81,11 @@ class Tracker extends React.Component {
 
   componentDidMount() {
     this.trackerStore.attach();
-    this.trackerStore.setProfileOptions(this.profileTrackerStore.options);
+    const globalOptions = this.rootStore && this.rootStore.options && this.rootStore.options.options;
+    this.trackerStore.setProfileOptions({
+      ...this.profileTrackerStore.options,
+      debugDumps: !!(globalOptions && globalOptions.debugDumps),
+    });
   }
 
   componentWillUnmount() {

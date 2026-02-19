@@ -326,6 +326,9 @@
     "doNotSendStatistics": {
         "message": "Do not send statistics"
     },
+    "debugDumps": {
+        "message": "Debug mode: dump tracker HTML responses to DevTools"
+    },
     "quickSearch": {
         "message": "Quick search"
     },

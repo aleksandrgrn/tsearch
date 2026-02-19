@@ -101,6 +101,9 @@
    "doNotSendStatistics": {
       "message": "Не відправляти статистику"
    },
+   "debugDumps": {
+      "message": "Режим налагодження: дампити HTML відповідей трекерів в DevTools"
+   },
    "edit": {
       "message": "Редагувати"
    },

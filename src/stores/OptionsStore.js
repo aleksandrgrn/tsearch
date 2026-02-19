@@ -87,6 +87,10 @@ const OptionsValueStore = types.model('OptionsValueStore', {
   repositories: types.optional(types.array(types.string), [
     'https://api.github.com/repos/feverqwe/tSearch/contents/external'
   ]),
+
+  // Dev/diagnostic: enables extra tracker HTML dumps to DevTools.
+  // Keep disabled by default to avoid memory/console noise.
+  debugDumps: types.optional(types.boolean, false),
 }).actions(self => {
   return {
     setValue(key, value) {

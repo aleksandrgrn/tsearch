@@ -326,6 +326,9 @@
   "doNotSendStatistics": {
     "message": "Не отправлять статистику"
   },
+  "debugDumps": {
+    "message": "Режим отладки: дампить HTML ответов трекеров в DevTools"
+  },
   "quickSearch": {
     "message": "Быстрый поиск"
   },

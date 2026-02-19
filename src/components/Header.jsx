@@ -19,6 +19,18 @@ class Header extends React.Component {
     const location = '/search?' + qs.stringify({
       query: query
     });
+
+    // Avoid history warning: "Hash history cannot PUSH the same path".
+    // When user submits the same query while already on the same /search route,
+    // we don't need to add a duplicate history entry.
+    const currentLocation = this.props.history && this.props.history.location;
+    const currentPath = currentLocation
+      ? `${currentLocation.pathname || ''}${currentLocation.search || ''}`
+      : null;
+    if (currentPath === location) {
+      return;
+    }
+
     this.props.history.push(location);
   };
 

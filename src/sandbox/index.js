@@ -78,6 +78,10 @@ const api = {
       throw err;
     });
   },
+  setInfo: function (info) {
+    api.info = info;
+    return true;
+  },
   events: {}
 };
 

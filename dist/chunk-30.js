@@ -117,6 +117,10 @@ let Options = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_6__["inject"])(
             name: 'singleResultTable'
           }), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(OptionCheckbox, {
             name: 'doNotSendStatistics'
+          }), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("h2", {
+            className: "page__title"
+          }, chrome.i18n.getMessage('advanced_options')), react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement(OptionCheckbox, {
+            name: 'debugDumps'
           }));
           break;
         }

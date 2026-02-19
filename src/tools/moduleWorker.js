@@ -21,6 +21,31 @@ class ModuleWorker {
     this.api = {
       request: (details) => {
         return exKitRequest(this, details);
+      },
+      debugDump: (payload) => {
+        try {
+          if (!this.profileOptions || !this.profileOptions.debugDumps) {
+            return true;
+          }
+
+          if (typeof globalThis !== 'undefined') {
+            globalThis.__tsearchDebugHtml = globalThis.__tsearchDebugHtml || [];
+            globalThis.__tsearchDebugHtml.push({
+              ...payload,
+              timestamp: Date.now(),
+            });
+
+            // Avoid unbounded growth in long sessions
+            const maxItems = 20;
+            if (globalThis.__tsearchDebugHtml.length > maxItems) {
+              globalThis.__tsearchDebugHtml.splice(0, globalThis.__tsearchDebugHtml.length - maxItems);
+            }
+          }
+          console.warn('[tsearch-debug] dump', payload);
+        } catch (err) {
+          console.warn('[tsearch-debug] debugDump handler error', err);
+        }
+        return true;
       }
     };
   }
@@ -31,7 +56,8 @@ class ModuleWorker {
       moduleId: module.id
     }, this.api);
     const info = {
-      locale: module.meta.locale
+      locale: module.meta.locale,
+      profileOptions: this.profileOptions || {},
     };
     return this.worker.callFn('init', [module.code, module.meta.require, info]).catch(err => {
       this.destroyWorker();
@@ -40,6 +66,19 @@ class ModuleWorker {
   }
   setProfileOptions(profileOptions) {
     this.profileOptions = profileOptions || {};
+
+    // If sandbox is already initialized, update its info dynamically,
+    // so diagnostic flags can be toggled without reloading worker.
+    try {
+      if (this.worker) {
+        this.worker.callFn('setInfo', [{
+          locale: this.module && this.module.meta ? this.module.meta.locale : undefined,
+          profileOptions: this.profileOptions || {},
+        }]);
+      }
+    } catch (err) {
+      // ignore - info update is best-effort
+    }
   }
   callFn(event, args) {
     return this.worker.callFn(event, args);

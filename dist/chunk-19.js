@@ -72,6 +72,7 @@ class ExKitTracker {
   }
 
   parseResponse(session, response) {
+    this.dumpDebugHtml(session, response);
     const doc = session.doc = API_getDoc(response.body, response.url);
 
     if (this.code.hooks.onGetDoc) {
@@ -117,6 +118,113 @@ class ExKitTracker {
       results,
       nextPageUrl
     };
+  }
+
+  dumpDebugHtml(session, response) {
+    try {
+      const info = typeof API_getInfo === 'function' ? API_getInfo() : null;
+      const debugDumpsEnabled = !!(info && info.profileOptions && info.profileOptions.debugDumps);
+
+      if (!debugDumpsEnabled) {
+        return;
+      }
+
+      if (!response || typeof response.body !== 'string') {
+        return;
+      }
+
+      const url = response.url || '';
+      const shouldDump = /rutor\.info|nnmclub\.to/i.test(url);
+
+      if (!shouldDump) {
+        return;
+      }
+
+      const previewLength = 2000;
+      const preview = response.body.slice(0, previewLength); // Store full HTML (bounded) + focused snippets.
+      // Many parsing bugs require inspecting the table area, which often isn't in the first 2000 chars.
+      // NOTE: keep numeric literal compatible with older Babel config (no numeric separators)
+
+      const maxHtmlLength = 800000;
+      const html = response.body.length > maxHtmlLength ? response.body.slice(0, maxHtmlLength) + `\n<!-- tsearch-debug: truncated to ${maxHtmlLength} chars (original ${response.body.length}) -->\n` : response.body;
+      let focusHtml = null;
+      let focusSelector = null;
+
+      try {
+        const tmpDoc = API_getDoc(response.body, url);
+
+        if (/rutor\.info/i.test(url)) {
+          focusSelector = '#index';
+          const el = tmpDoc.querySelector(focusSelector) || tmpDoc.querySelector('#all') || tmpDoc.body;
+          focusHtml = el ? el.outerHTML : null;
+        } else if (/nnmclub\.to/i.test(url)) {
+          focusSelector = 'table.forumline.tablesorter';
+          const el = tmpDoc.querySelector(focusSelector) || tmpDoc.querySelector('table.forumline') || tmpDoc.body;
+          focusHtml = el ? el.outerHTML : null;
+        }
+      } catch (err) {// ignore focus errors
+      }
+
+      let selectorStats = null;
+
+      try {
+        const tmpDoc = API_getDoc(response.body, url);
+        const selectorsMap = this.code && this.code.selectors ? this.code.selectors : null;
+
+        const safeCount = selector => {
+          if (!selector) return null;
+
+          try {
+            return Object(_tools_sizzleQuery__WEBPACK_IMPORTED_MODULE_0__["sizzleQuerySelectorAll"])(tmpDoc, selector).length;
+          } catch (err) {
+            // invalid selector for Sizzle or DOM
+            return null;
+          }
+        };
+
+        selectorStats = {
+          row: selectorsMap && selectorsMap.row ? safeCount(selectorsMap.row.selector) : null,
+          title: selectorsMap && selectorsMap.title ? safeCount(selectorsMap.title.selector) : null,
+          url: selectorsMap && selectorsMap.url ? safeCount(selectorsMap.url.selector) : null,
+          downloadUrl: selectorsMap && selectorsMap.downloadUrl ? safeCount(selectorsMap.downloadUrl.selector) : null,
+          nextPageUrl: selectorsMap && selectorsMap.nextPageUrl ? safeCount(selectorsMap.nextPageUrl.selector) : null
+        };
+      } catch (err) {// ignore stats errors
+      }
+
+      if (typeof API_debugDump === 'function') {
+        API_debugDump({
+          kind: 'trackerHtml',
+          url,
+          length: response.body.length,
+          preview,
+          html,
+          focusSelector,
+          focusHtml,
+          selectorStats
+        });
+      }
+
+      if (typeof window !== 'undefined') {
+        window.__tsearchDebugHtml = window.__tsearchDebugHtml || {};
+        window.__tsearchDebugHtml[url] = {
+          url,
+          length: response.body.length,
+          preview,
+          timestamp: Date.now()
+        };
+      }
+
+      console.warn('[tsearch-debug] HTML dump saved', {
+        url,
+        length: response.body.length,
+        preview,
+        focusSelector,
+        selectorStats
+      });
+    } catch (err) {
+      console.warn('[tsearch-debug] dump error', err);
+    }
   }
 
   parseRow(session, row) {
