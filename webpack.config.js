@@ -15,6 +15,7 @@ const babelEnvOptions = BUILD_ENV.babelEnvOptions;
 const config = {
   entry: {
     bg: './src/background',
+    offscreen: './src/offscreen',
     sandbox: './src/sandbox',
     popup: './src/Popup',
     index: './src/App',

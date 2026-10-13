@@ -82,6 +82,10 @@ class ExKitTracker {
 
     const results = [];
     for (let i = 0, row; row = rows[i]; i++) {
+      const titleSelector = this.code.selectors.title && this.code.selectors.title.selector;
+      // Trackers use a single full-width cell for empty-result notices.
+      if (titleSelector && row.children.length === 1 && row.firstElementChild.colSpan > 1 &&
+          !sizzleQuerySelector(row, titleSelector)) continue;
       try {
         const result = this.parseRow(session, row);
         results.push(result);

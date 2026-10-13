@@ -10,8 +10,8 @@
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _tools_sizzleQuery__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../tools/sizzleQuery */ 531);
-/* harmony import */ var _tools_convertCodeV1toV2__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../tools/convertCodeV1toV2 */ 69);
-/* harmony import */ var _tools_convertCodeV2toV3__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../tools/convertCodeV2toV3 */ 70);
+/* harmony import */ var _tools_convertCodeV1toV2__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../tools/convertCodeV1toV2 */ 68);
+/* harmony import */ var _tools_convertCodeV2toV3__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../tools/convertCodeV2toV3 */ 69);
 /* harmony import */ var _tools_encodeCp1251__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../tools/encodeCp1251 */ 532);
 /* harmony import */ var _tools_assertType__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../tools/assertType */ 292);
 /* harmony import */ var _tools_exKitPipelineMethods__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../tools/exKitPipelineMethods */ 533);
@@ -96,6 +96,10 @@ class ExKitTracker {
     const results = [];
 
     for (let i = 0, row; row = rows[i]; i++) {
+      const titleSelector = this.code.selectors.title && this.code.selectors.title.selector; // Trackers use a single full-width cell for empty-result notices.
+
+      if (titleSelector && row.children.length === 1 && row.firstElementChild.colSpan > 1 && !Object(_tools_sizzleQuery__WEBPACK_IMPORTED_MODULE_0__["sizzleQuerySelector"])(row, titleSelector)) continue;
+
       try {
         const result = this.parseRow(session, row);
         results.push(result);

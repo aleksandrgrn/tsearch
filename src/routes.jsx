@@ -12,7 +12,7 @@ const routes = [{
   exact: true,
   render: props => {
     return (
-      <ComponentLoader load-page={'main'}/>
+      <Redirect to={'/search?query='}/>
     );
   },
 }, {
@@ -27,13 +27,8 @@ const routes = [{
   path: '/search',
   render: props => {
     const query = qs.parse(props.location.search.substr(1));
-    if (query.query === undefined) {
-      return (
-        <Redirect to={'/'}/>
-      );
-    }
     return (
-      <Search key={`unic-${Date.now()}`} query={query.query}/>
+      <Search key={uuid()} query={query.query === undefined ? '' : query.query}/>
     );
   },
 }, {

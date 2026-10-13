@@ -267,16 +267,16 @@
 /******/ 	return checkDeferredModules();
 /******/ })
 /************************************************************************/
-/******/ (Array(65).concat([
-/* 65 */
+/******/ (Array(64).concat([
+/* 64 */
 /*!*********************************!*\
   !*** ./node_modules/uuid/v4.js ***!
   \*********************************/
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-var rng = __webpack_require__(/*! ./lib/rng */ 66);
-var bytesToUuid = __webpack_require__(/*! ./lib/bytesToUuid */ 67);
+var rng = __webpack_require__(/*! ./lib/rng */ 65);
+var bytesToUuid = __webpack_require__(/*! ./lib/bytesToUuid */ 66);
 
 function v4(options, buf, offset) {
   var i = buf && offset || 0;
@@ -307,7 +307,7 @@ module.exports = v4;
 
 
 /***/ }),
-/* 66 */
+/* 65 */
 /*!**********************************************!*\
   !*** ./node_modules/uuid/lib/rng-browser.js ***!
   \**********************************************/
@@ -351,7 +351,7 @@ if (getRandomValues) {
 
 
 /***/ }),
-/* 67 */
+/* 66 */
 /*!**********************************************!*\
   !*** ./node_modules/uuid/lib/bytesToUuid.js ***!
   \**********************************************/
@@ -385,6 +385,7 @@ module.exports = bytesToUuid;
 
 
 /***/ }),
+/* 67 */,
 /* 68 */,
 /* 69 */,
 /* 70 */,
@@ -633,7 +634,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _routes__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./routes */ 320);
 /* harmony import */ var _src_assets_css_index_less__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../src/assets/css/index.less */ 441);
 /* harmony import */ var _src_assets_css_index_less__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(_src_assets_css_index_less__WEBPACK_IMPORTED_MODULE_6__);
-/* harmony import */ var _tools_errorTracker__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./tools/errorTracker */ 61);
+/* harmony import */ var _tools_errorTracker__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./tools/errorTracker */ 60);
 /* harmony import */ var _components_WhenReady__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./components/WhenReady */ 442);
 function _extends() { _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends.apply(this, arguments); }
 
@@ -4347,14 +4348,14 @@ __webpack_require__.r(__webpack_exports__);
 
 const qs = __webpack_require__(/*! querystring */ 30);
 
-const uuid = __webpack_require__(/*! uuid/v4 */ 65);
+const uuid = __webpack_require__(/*! uuid/v4 */ 64);
 
 const routes = [{
   path: '/',
   exact: true,
   render: props => {
-    return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_components_ComponentLoader__WEBPACK_IMPORTED_MODULE_3__["default"], {
-      "load-page": 'main'
+    return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(react_router_dom__WEBPACK_IMPORTED_MODULE_2__["Redirect"], {
+      to: '/search?query='
     });
   }
 }, {
@@ -4370,16 +4371,9 @@ const routes = [{
   path: '/search',
   render: props => {
     const query = qs.parse(props.location.search.substr(1));
-
-    if (query.query === undefined) {
-      return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(react_router_dom__WEBPACK_IMPORTED_MODULE_2__["Redirect"], {
-        to: '/'
-      });
-    }
-
     return react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(_pages_Search__WEBPACK_IMPORTED_MODULE_4__["default"], {
-      key: `unic-${Date.now()}`,
-      query: query.query
+      key: uuid(),
+      query: query.query === undefined ? '' : query.query
     });
   }
 }, {
@@ -4514,14 +4508,13 @@ let Header = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_4__["inject"])('
     _defineProperty(this, "handleSubmit", query => {
       const location = '/search?' + qs.stringify({
         query: query
-      }); // Avoid history warning: "Hash history cannot PUSH the same path".
-      // When user submits the same query while already on the same /search route,
-      // we don't need to add a duplicate history entry.
+      }); // Refresh the current search without adding a duplicate history entry.
 
       const currentLocation = this.props.history && this.props.history.location;
       const currentPath = currentLocation ? `${currentLocation.pathname || ''}${currentLocation.search || ''}` : null;
 
       if (currentPath === location) {
+        this.props.history.replace(location);
         return;
       }
 
@@ -4592,7 +4585,7 @@ const CodeMaker = react__WEBPACK_IMPORTED_MODULE_0___default.a.lazy(() => Promis
 const ProfileEditor = react__WEBPACK_IMPORTED_MODULE_0___default.a.lazy(() => Promise.all(/*! import() */[__webpack_require__.e(27), __webpack_require__.e(24)]).then(__webpack_require__.bind(null, /*! ../pages/ProfileEditor */ 630)));
 const History = react__WEBPACK_IMPORTED_MODULE_0___default.a.lazy(() => __webpack_require__.e(/*! import() */ 29).then(__webpack_require__.bind(null, /*! ../pages/History */ 636)));
 const Options = react__WEBPACK_IMPORTED_MODULE_0___default.a.lazy(() => __webpack_require__.e(/*! import() */ 30).then(__webpack_require__.bind(null, /*! ../pages/Options */ 638)));
-const Main = react__WEBPACK_IMPORTED_MODULE_0___default.a.lazy(() => Promise.all(/*! import() */[__webpack_require__.e(27), __webpack_require__.e(9), __webpack_require__.e(2)]).then(__webpack_require__.bind(null, /*! ../pages/Main */ 640)));
+const Main = react__WEBPACK_IMPORTED_MODULE_0___default.a.lazy(() => Promise.all(/*! import() */[__webpack_require__.e(27), __webpack_require__.e(31), __webpack_require__.e(2)]).then(__webpack_require__.bind(null, /*! ../pages/Main */ 640)));
 const idComponent = {
   editor: Editor,
   codeMaker: CodeMaker,
@@ -4701,7 +4694,7 @@ let Search = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_6__["inject"])('
   render() {
     let searchSession = null;
 
-    if (this.rootStore.options.state === 'done' && this.rootStore.history.state === 'done' && this.rootStore.profiles.state === 'done' && this.rootStore.trackers.state === 'done' && this.rootStore.profiles.profile) {
+    if (this.props.query.trim() && this.rootStore.options.state === 'done' && this.rootStore.history.state === 'done' && this.rootStore.profiles.state === 'done' && this.rootStore.trackers.state === 'done' && this.rootStore.profiles.profile) {
       searchSession = react__WEBPACK_IMPORTED_MODULE_0___default.a.createElement(SearchSession, {
         query: this.props.query
       });

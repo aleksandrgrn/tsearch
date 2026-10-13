@@ -104,7 +104,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, response) {
     }
     case 'tabFetchResponse': {
       if (tabFetchBg) {
-        tabFetchBg.handleResponse(message.id, message.result);
+        tabFetchBg.handleResponse(message.id, message.result, message.sessionId);
       }
       break;
     }

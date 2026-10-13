@@ -36,7 +36,7 @@
 /******/ 	// undefined = chunk not loaded, null = chunk preloaded/prefetched
 /******/ 	// Promise = chunk loading, 0 = chunk loaded
 /******/ 	var installedChunks = {
-/******/ 		7: 0
+/******/ 		8: 0
 /******/ 	};
 /******/
 /******/
@@ -1103,7 +1103,7 @@ const altRequire = modules => {
   }
 
   if (modules.indexOf('exKit') !== -1) {
-    promiseList.push(Promise.all(/*! import() */[__webpack_require__.e(17), __webpack_require__.e(12), __webpack_require__.e(19), __webpack_require__.e(8)]).then(__webpack_require__.bind(null, /*! ./exKit */ 527)).then(module => {
+    promiseList.push(Promise.all(/*! import() */[__webpack_require__.e(17), __webpack_require__.e(12), __webpack_require__.e(19), __webpack_require__.e(9)]).then(__webpack_require__.bind(null, /*! ./exKit */ 527)).then(module => {
       window.exKit = module.exKit;
       window.API_exKit = module.API_exKit;
     }));

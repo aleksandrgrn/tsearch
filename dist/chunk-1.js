@@ -21,7 +21,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _components_Dialog__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../components/Dialog */ 585);
 /* harmony import */ var _tools_getLogger__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../tools/getLogger */ 8);
 /* harmony import */ var _tools_getTitle__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../tools/getTitle */ 440);
-/* harmony import */ var _tools_jsonCodeToUserscript__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../tools/jsonCodeToUserscript */ 68);
+/* harmony import */ var _tools_jsonCodeToUserscript__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../tools/jsonCodeToUserscript */ 67);
 var _dec, _class, _class2, _temp;
 
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
@@ -371,7 +371,7 @@ class Dialog extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
 
 /***/ }),
 
-/***/ 68:
+/***/ 67:
 /*!*******************************************!*\
   !*** ./src/tools/jsonCodeToUserscript.js ***!
   \*******************************************/
@@ -380,9 +380,9 @@ class Dialog extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var _convertCodeV1toV2__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./convertCodeV1toV2 */ 69);
-/* harmony import */ var _convertCodeV2toV3__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./convertCodeV2toV3 */ 70);
-/* harmony import */ var _jsonToUserscript__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./jsonToUserscript */ 71);
+/* harmony import */ var _convertCodeV1toV2__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./convertCodeV1toV2 */ 68);
+/* harmony import */ var _convertCodeV2toV3__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./convertCodeV2toV3 */ 69);
+/* harmony import */ var _jsonToUserscript__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./jsonToUserscript */ 70);
 
 
 
@@ -405,7 +405,7 @@ const jsonCodeToUserscript = text => {
 
 /***/ }),
 
-/***/ 71:
+/***/ 70:
 /*!***************************************!*\
   !*** ./src/tools/jsonToUserscript.js ***!
   \***************************************/
@@ -414,7 +414,7 @@ const jsonCodeToUserscript = text => {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-const stringify = __webpack_require__(/*! json-stringify-pretty-compact */ 72);
+const stringify = __webpack_require__(/*! json-stringify-pretty-compact */ 71);
 
 const jsonToUserscript = json => {
   const meta = [];

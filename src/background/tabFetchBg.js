@@ -1,5 +1,4 @@
 import promiseFinally from "../tools/promiseFinally";
-import debounce from "lodash.debounce";
 import getLogger from "../tools/getLogger";
 
 const deserializeError = require('deserialize-error');
@@ -23,15 +22,6 @@ class TabFetchBg {
 
   async request(senderTabId, originUrl, fetchUrl, fetchOptions) {
     DEBUG && logger.debug('request', senderTabId, originUrl, fetchUrl, fetchOptions);
-
-    const permissions = {
-      permissions: ['tabs'],
-    };
-
-    const hasPermissions = await containsPermissions(permissions);
-    if (!hasPermissions) {
-      await requestPermissions(permissions);
-    }
 
     if (!this.senderTabMap.has(senderTabId)) {
       this.senderTabMap.set(senderTabId, new SenderTab(this, senderTabId));
@@ -57,14 +47,20 @@ class TabFetchBg {
     return request.id;
   }
 
-  deleteOriginTab(originUrl) {
-    this.originTabMap.delete(originUrl);
+  deleteOriginTab(originUrl, originTab) {
+    if (this.originTabMap.get(originUrl) === originTab) this.originTabMap.delete(originUrl);
   }
 
   addRemovedTabListener() {
     if (!chrome.tabs.onRemoved.hasListener(this.tabRemoveListener)) {
       DEBUG && logger.debug('addRemovedTabListener');
       chrome.tabs.onRemoved.addListener(this.tabRemoveListener);
+    }
+  }
+
+  removeRemovedTabListenerIfIdle() {
+    if (!this.originTabMap.size && !this.idRequestMap.size) {
+      this.removeRemovedTabListener();
     }
   }
 
@@ -105,14 +101,13 @@ class TabFetchBg {
     }
   }
 
-  handleResponse(id, result) {
+  handleResponse(id, result, sessionId) {
     DEBUG && logger.debug('handleResponse', id);
     const request = this.idRequestMap.get(id);
     if (request) {
-      return request.handleResponse(result);
-    } else {
-      throw new Error(`handleResponse error ${id} is not found`);
+      return request.handleResponse(result, sessionId);
     }
+    // A response can arrive after cancellation or a tab navigation.
   }
 
   abortRequest(id) {
@@ -183,7 +178,7 @@ class OriginTab {
         this.requests.splice(pos, 1);
       }
       if (!this.requests.length) {
-        this.closeOnIdleDebounce();
+        this.closeOnIdle();
       }
     });
   }
@@ -191,15 +186,16 @@ class OriginTab {
   initTab() {
     DEBUG && logger.debug('OriginTab createTab', this.tabId, this.originUrl);
     if (this.tabPromise) return this.tabPromise;
-    return this.tabPromise = Promise.resolve().then(() => {
-      if (this.tabFetchBg.isMobile) {
-        return createTab(this.originUrl);
-      } else {
-        return createPopup(this.originUrl);
-      }
+    // Host permissions already allow querying matching tracker tabs.
+    return this.tabPromise = chrome.tabs.query({
+      url: new URL(this.originUrl).origin + '/*'
+    }).then(tabs => {
+      if (!this.requests.length) return null;
+      if (tabs.length) return tabs[0].id;
+      return chrome.tabs.create({url: this.originUrl, active: false}).then(tab => tab.id);
     }).then((tabId) => {
       this.tabId = tabId;
-      this.addTabUpdatedListener();
+      if (tabId !== null && this.requests.length) this.addTabUpdatedListener();
     });
   }
 
@@ -219,21 +215,23 @@ class OriginTab {
 
   tabUpdatedListener = (tabId, changeInfo) => {
     if (tabId !== this.tabId) return;
-    if (!changeInfo.url) return;
-    DEBUG && logger.debug('OriginTab tabUpdatedListener', this.tabId, this.originUrl);
-
-    this.requests.forEach((request) => {
-      request.initSession();
-    });
+    if (changeInfo.url && new URL(changeInfo.url).host !== new URL(this.originUrl).host) {
+      this.requests.forEach(request => request.abort(new Error('Tracker tab navigated to another host')));
+      return;
+    }
+    if (changeInfo.status === 'loading') {
+      this.requests.forEach(request => request.invalidateSession());
+    } else if (changeInfo.status === 'complete' || changeInfo.url) {
+      this.requests.forEach(request => request.initSession());
+    }
   };
-
-  closeOnIdleDebounce = debounce(this.closeOnIdle.bind(this), 250);
 
   closeOnIdle() {
     if (!this.requests.length) {
       DEBUG && logger.debug('OriginTab closeOnIdle', this.tabId, this.originUrl);
-      this.tabFetchBg.deleteOriginTab(this.originUrl);
-      chrome.tabs.remove(this.tabId);
+      this.tabFetchBg.deleteOriginTab(this.originUrl, this);
+      this.removeTabUpdatedListener();
+      this.tabFetchBg.removeRemovedTabListenerIfIdle();
     }
   }
 
@@ -284,37 +282,37 @@ class Request extends Events {
   }
 
   async initSession() {
-    if (this.state === 'finished') return;
+    if (this.state !== 'pending') return;
     DEBUG && logger.debug('Request initSession', this.id);
 
     const sessionId = ++this.sessionIndex;
 
     return this.originTab.initTab().then(() => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
 
       return executeScriptPromise(this.originTab.tabId, {
         file: 'tabFetch.js'
       });
     }).then(() => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
 
       const { origin: originTabOrigin } = new URL(this.originTab.originUrl);
       const { origin: urlOrigin } = new URL(this.url);
       const isSameOrigin = urlOrigin === originTabOrigin;
 
       return executeScriptPromise(this.originTab.tabId, {
-        func: function (id, url, options, isSameOrigin) {
+        func: function (id, url, options, isSameOrigin, sessionId) {
           try {
-            window.tabFetch(id, url, options, isSameOrigin);
+            window.tabFetch(id, url, options, isSameOrigin, sessionId);
             return { result: true };
           } catch (err) {
             return { error: { message: err.message, stack: err.stack } };
           }
         },
-        args: [this.id, this.url, this.options, isSameOrigin]
+        args: [this.id, this.url, this.options, isSameOrigin, sessionId]
       }).then(results => results[0]);
     }).then((result) => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
 
       if (!result) {
         this.handleReject(new Error('tabFetch error'));
@@ -323,13 +321,14 @@ class Request extends Events {
           this.handleReject(deserializeError(result.error));
         }
     }, (err) => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
 
       this.handleReject(err);
     });
   }
 
-  handleResponse(result) {
+  handleResponse(result, sessionId) {
+    if (this.state !== 'pending' || sessionId !== this.sessionIndex) return;
     DEBUG && logger.debug('Request handleResponse', this.id);
     if (result.error) {
       this.handleReject(deserializeError(result.error));
@@ -338,20 +337,22 @@ class Request extends Events {
     }
   }
 
-  abort(reason) {
-    DEBUG && logger.debug('Request abort', this.id);
-    if (this.state === 'pending') {
+  invalidateSession() {
+    const sessionId = this.sessionIndex++;
+    if (this.state === 'pending' && this.originTab.tabId !== null) {
       executeScriptPromise(this.originTab.tabId, {
-        func: function (id) {
-          try {
-            window.tabFetchAbort(id);
-          } catch (err) {
-            console.error('tabFetchAbort error', err);
-          }
+        func: function (id, sessionId) {
+          if (window.tabFetchAbort) window.tabFetchAbort(id, sessionId);
         },
-        args: [this.id]
-      });
+        args: [this.id, sessionId]
+      }).catch(() => {}); // The document may already be gone.
     }
+  }
+
+  abort(reason) {
+    if (this.state === 'finished') return;
+    this.invalidateSession();
+    this.state = 'finished';
     this.handleReject(reason || new Error('Aborted'));
   }
 
@@ -360,33 +361,6 @@ class Request extends Events {
     this.abort(new Error('Destroyed'));
   }
 }
-
-const createPopup = (originUrl) => {
-  return new Promise(resolve => chrome.windows.create({
-    url: originUrl,
-    focused: false,
-    width: 120,
-    height: 25,
-    left: screen.availWidth,
-    top: screen.availHeight,
-    type: 'popup',
-  }, resolve)).then((window) => {
-    const tabId = window.tabs[0].id;
-    chrome.tabs.update(tabId, { muted: true });
-    return tabId;
-  });
-};
-
-const createTab = (originUrl) => {
-  return new Promise(resolve => chrome.tabs.create({
-    url: originUrl,
-    active: false,
-  }, resolve)).then((tab) => {
-    const tabId = tab.id;
-    chrome.tabs.update(tabId, { muted: true });
-    return tabId;
-  });
-};
 
 const executeScriptPromise = (tabId, options) => {
   const injection = {
@@ -420,32 +394,6 @@ const executeScriptPromise = (tabId, options) => {
       // results is array of {frameId, result}
       return results.map(r => r.result);
     });
-};
-
-const containsPermissions = (permissions) => {
-  return new Promise((resolve, reject) => {
-    chrome.permissions.contains(permissions, (result) => {
-      const err = chrome.runtime.lastError;
-      err ? reject(err) : resolve(result);
-    });
-  });
-};
-
-const requestPermissions = (permissions) => {
-  return new Promise((resolve, reject) => {
-    chrome.permissions.request(permissions, (result) => {
-      const err = chrome.runtime.lastError;
-      err ? reject(err) : resolve(result);
-    });
-  }).then((granted) => {
-    if (!granted) {
-      throw new Error('Permissions is not granted');
-    }
-  });
-};
-
-const strArgs = (...args) => {
-  return args.map(JSON.stringify).join(',');
 };
 
 export default TabFetchBg;

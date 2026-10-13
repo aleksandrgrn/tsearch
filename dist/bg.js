@@ -221,11 +221,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _tools_storageGet__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../tools/storageGet */ 9);
 /* harmony import */ var _tools_storageSet__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../tools/storageSet */ 10);
 /* harmony import */ var _tabFetchBg__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./tabFetchBg */ 56);
-/* harmony import */ var _tools_migrate__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../tools/migrate */ 60);
-/* harmony import */ var _tools_errorTracker__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../tools/errorTracker */ 61);
-/* harmony import */ var _tools_getUserId__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../tools/getUserId */ 64);
-/* harmony import */ var _tools_jsonCodeToUserscript__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../tools/jsonCodeToUserscript */ 68);
-/* harmony import */ var _tools_setCodeMeta__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ../tools/setCodeMeta */ 73);
+/* harmony import */ var _tools_migrate__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../tools/migrate */ 59);
+/* harmony import */ var _tools_errorTracker__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../tools/errorTracker */ 60);
+/* harmony import */ var _tools_getUserId__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../tools/getUserId */ 63);
+/* harmony import */ var _tools_jsonCodeToUserscript__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../tools/jsonCodeToUserscript */ 67);
+/* harmony import */ var _tools_setCodeMeta__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ../tools/setCodeMeta */ 72);
 
 
 
@@ -348,7 +348,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, response) {
     case 'tabFetchResponse':
       {
         if (tabFetchBg) {
-          tabFetchBg.handleResponse(message.id, message.result);
+          tabFetchBg.handleResponse(message.id, message.result, message.sessionId);
         }
 
         break;
@@ -17297,20 +17297,17 @@ const getExploreModuleCodeMeta = function (code) {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _tools_promiseFinally__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../tools/promiseFinally */ 57);
-/* harmony import */ var lodash_debounce__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! lodash.debounce */ 58);
-/* harmony import */ var lodash_debounce__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(lodash_debounce__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _tools_getLogger__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../tools/getLogger */ 8);
+/* harmony import */ var _tools_getLogger__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../tools/getLogger */ 8);
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
-
 
 
 
 
 const deserializeError = __webpack_require__(/*! deserialize-error */ 26);
 
-const Events = __webpack_require__(/*! events */ 59);
+const Events = __webpack_require__(/*! events */ 58);
 
-const logger = Object(_tools_getLogger__WEBPACK_IMPORTED_MODULE_2__["default"])('TabFetchBg');
+const logger = Object(_tools_getLogger__WEBPACK_IMPORTED_MODULE_1__["default"])('TabFetchBg');
 const DEBUG = false;
 
 class TabFetchBg {
@@ -17346,14 +17343,6 @@ class TabFetchBg {
 
   async request(senderTabId, originUrl, fetchUrl, fetchOptions) {
     DEBUG && logger.debug('request', senderTabId, originUrl, fetchUrl, fetchOptions);
-    const permissions = {
-      permissions: ['tabs']
-    };
-    const hasPermissions = await containsPermissions(permissions);
-
-    if (!hasPermissions) {
-      await requestPermissions(permissions);
-    }
 
     if (!this.senderTabMap.has(senderTabId)) {
       this.senderTabMap.set(senderTabId, new SenderTab(this, senderTabId));
@@ -17377,14 +17366,20 @@ class TabFetchBg {
     return request.id;
   }
 
-  deleteOriginTab(originUrl) {
-    this.originTabMap.delete(originUrl);
+  deleteOriginTab(originUrl, originTab) {
+    if (this.originTabMap.get(originUrl) === originTab) this.originTabMap.delete(originUrl);
   }
 
   addRemovedTabListener() {
     if (!chrome.tabs.onRemoved.hasListener(this.tabRemoveListener)) {
       DEBUG && logger.debug('addRemovedTabListener');
       chrome.tabs.onRemoved.addListener(this.tabRemoveListener);
+    }
+  }
+
+  removeRemovedTabListenerIfIdle() {
+    if (!this.originTabMap.size && !this.idRequestMap.size) {
+      this.removeRemovedTabListener();
     }
   }
 
@@ -17406,15 +17401,14 @@ class TabFetchBg {
     }
   }
 
-  handleResponse(id, result) {
+  handleResponse(id, result, sessionId) {
     DEBUG && logger.debug('handleResponse', id);
     const request = this.idRequestMap.get(id);
 
     if (request) {
-      return request.handleResponse(result);
-    } else {
-      throw new Error(`handleResponse error ${id} is not found`);
-    }
+      return request.handleResponse(result, sessionId);
+    } // A response can arrive after cancellation or a tab navigation.
+
   }
 
   abortRequest(id) {
@@ -17471,14 +17465,18 @@ class OriginTab {
   constructor(tabFetchBg, originUrl) {
     _defineProperty(this, "tabUpdatedListener", (tabId, changeInfo) => {
       if (tabId !== this.tabId) return;
-      if (!changeInfo.url) return;
-      DEBUG && logger.debug('OriginTab tabUpdatedListener', this.tabId, this.originUrl);
-      this.requests.forEach(request => {
-        request.initSession();
-      });
-    });
 
-    _defineProperty(this, "closeOnIdleDebounce", lodash_debounce__WEBPACK_IMPORTED_MODULE_1___default()(this.closeOnIdle.bind(this), 250));
+      if (changeInfo.url && new URL(changeInfo.url).host !== new URL(this.originUrl).host) {
+        this.requests.forEach(request => request.abort(new Error('Tracker tab navigated to another host')));
+        return;
+      }
+
+      if (changeInfo.status === 'loading') {
+        this.requests.forEach(request => request.invalidateSession());
+      } else if (changeInfo.status === 'complete' || changeInfo.url) {
+        this.requests.forEach(request => request.initSession());
+      }
+    });
 
     this.tabFetchBg = tabFetchBg;
     this.originUrl = originUrl;
@@ -17499,23 +17497,27 @@ class OriginTab {
       }
 
       if (!this.requests.length) {
-        this.closeOnIdleDebounce();
+        this.closeOnIdle();
       }
     });
   }
 
   initTab() {
     DEBUG && logger.debug('OriginTab createTab', this.tabId, this.originUrl);
-    if (this.tabPromise) return this.tabPromise;
-    return this.tabPromise = Promise.resolve().then(() => {
-      if (this.tabFetchBg.isMobile) {
-        return createTab(this.originUrl);
-      } else {
-        return createPopup(this.originUrl);
-      }
+    if (this.tabPromise) return this.tabPromise; // Host permissions already allow querying matching tracker tabs.
+
+    return this.tabPromise = chrome.tabs.query({
+      url: new URL(this.originUrl).origin + '/*'
+    }).then(tabs => {
+      if (!this.requests.length) return null;
+      if (tabs.length) return tabs[0].id;
+      return chrome.tabs.create({
+        url: this.originUrl,
+        active: false
+      }).then(tab => tab.id);
     }).then(tabId => {
       this.tabId = tabId;
-      this.addTabUpdatedListener();
+      if (tabId !== null && this.requests.length) this.addTabUpdatedListener();
     });
   }
 
@@ -17536,8 +17538,9 @@ class OriginTab {
   closeOnIdle() {
     if (!this.requests.length) {
       DEBUG && logger.debug('OriginTab closeOnIdle', this.tabId, this.originUrl);
-      this.tabFetchBg.deleteOriginTab(this.originUrl);
-      chrome.tabs.remove(this.tabId);
+      this.tabFetchBg.deleteOriginTab(this.originUrl, this);
+      this.removeTabUpdatedListener();
+      this.tabFetchBg.removeRemovedTabListenerIfIdle();
     }
   }
 
@@ -17585,16 +17588,16 @@ class Request extends Events {
   }
 
   async initSession() {
-    if (this.state === 'finished') return;
+    if (this.state !== 'pending') return;
     DEBUG && logger.debug('Request initSession', this.id);
     const sessionId = ++this.sessionIndex;
     return this.originTab.initTab().then(() => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
       return executeScriptPromise(this.originTab.tabId, {
         file: 'tabFetch.js'
       });
     }).then(() => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
       const {
         origin: originTabOrigin
       } = new URL(this.originTab.originUrl);
@@ -17603,9 +17606,9 @@ class Request extends Events {
       } = new URL(this.url);
       const isSameOrigin = urlOrigin === originTabOrigin;
       return executeScriptPromise(this.originTab.tabId, {
-        func: function (id, url, options, isSameOrigin) {
+        func: function (id, url, options, isSameOrigin, sessionId) {
           try {
-            window.tabFetch(id, url, options, isSameOrigin);
+            window.tabFetch(id, url, options, isSameOrigin, sessionId);
             return {
               result: true
             };
@@ -17618,10 +17621,10 @@ class Request extends Events {
             };
           }
         },
-        args: [this.id, this.url, this.options, isSameOrigin]
+        args: [this.id, this.url, this.options, isSameOrigin, sessionId]
       }).then(results => results[0]);
     }).then(result => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
 
       if (!result) {
         this.handleReject(new Error('tabFetch error'));
@@ -17629,12 +17632,13 @@ class Request extends Events {
         this.handleReject(deserializeError(result.error));
       }
     }, err => {
-      if (sessionId !== this.sessionIndex) return;
+      if (sessionId !== this.sessionIndex || this.state !== 'pending') return;
       this.handleReject(err);
     });
   }
 
-  handleResponse(result) {
+  handleResponse(result, sessionId) {
+    if (this.state !== 'pending' || sessionId !== this.sessionIndex) return;
     DEBUG && logger.debug('Request handleResponse', this.id);
 
     if (result.error) {
@@ -17644,22 +17648,23 @@ class Request extends Events {
     }
   }
 
-  abort(reason) {
-    DEBUG && logger.debug('Request abort', this.id);
+  invalidateSession() {
+    const sessionId = this.sessionIndex++;
 
-    if (this.state === 'pending') {
+    if (this.state === 'pending' && this.originTab.tabId !== null) {
       executeScriptPromise(this.originTab.tabId, {
-        func: function (id) {
-          try {
-            window.tabFetchAbort(id);
-          } catch (err) {
-            console.error('tabFetchAbort error', err);
-          }
+        func: function (id, sessionId) {
+          if (window.tabFetchAbort) window.tabFetchAbort(id, sessionId);
         },
-        args: [this.id]
-      });
+        args: [this.id, sessionId]
+      }).catch(() => {}); // The document may already be gone.
     }
+  }
 
+  abort(reason) {
+    if (this.state === 'finished') return;
+    this.invalidateSession();
+    this.state = 'finished';
     this.handleReject(reason || new Error('Aborted'));
   }
 
@@ -17669,37 +17674,6 @@ class Request extends Events {
   }
 
 }
-
-const createPopup = originUrl => {
-  return new Promise(resolve => chrome.windows.create({
-    url: originUrl,
-    focused: false,
-    width: 120,
-    height: 25,
-    left: screen.availWidth,
-    top: screen.availHeight,
-    type: 'popup'
-  }, resolve)).then(window => {
-    const tabId = window.tabs[0].id;
-    chrome.tabs.update(tabId, {
-      muted: true
-    });
-    return tabId;
-  });
-};
-
-const createTab = originUrl => {
-  return new Promise(resolve => chrome.tabs.create({
-    url: originUrl,
-    active: false
-  }, resolve)).then(tab => {
-    const tabId = tab.id;
-    chrome.tabs.update(tabId, {
-      muted: true
-    });
-    return tabId;
-  });
-};
 
 const executeScriptPromise = (tabId, options) => {
   const injection = {
@@ -17735,32 +17709,6 @@ const executeScriptPromise = (tabId, options) => {
   });
 };
 
-const containsPermissions = permissions => {
-  return new Promise((resolve, reject) => {
-    chrome.permissions.contains(permissions, result => {
-      const err = chrome.runtime.lastError;
-      err ? reject(err) : resolve(result);
-    });
-  });
-};
-
-const requestPermissions = permissions => {
-  return new Promise((resolve, reject) => {
-    chrome.permissions.request(permissions, result => {
-      const err = chrome.runtime.lastError;
-      err ? reject(err) : resolve(result);
-    });
-  }).then(granted => {
-    if (!granted) {
-      throw new Error('Permissions is not granted');
-    }
-  });
-};
-
-const strArgs = (...args) => {
-  return args.map(JSON.stringify).join(',');
-};
-
 /* harmony default export */ __webpack_exports__["default"] = (TabFetchBg);
 
 /***/ }),
@@ -17787,394 +17735,6 @@ const promiseFinally = finallyFn => {
 
 /***/ }),
 /* 58 */
-/*!***********************************************!*\
-  !*** ./node_modules/lodash.debounce/index.js ***!
-  \***********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-/* WEBPACK VAR INJECTION */(function(global) {/**
- * lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright jQuery Foundation and other contributors <https://jquery.org/>
- * Released under MIT license <https://lodash.com/license>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- */
-
-/** Used as the `TypeError` message for "Functions" methods. */
-var FUNC_ERROR_TEXT = 'Expected a function';
-
-/** Used as references for various `Number` constants. */
-var NAN = 0 / 0;
-
-/** `Object#toString` result references. */
-var symbolTag = '[object Symbol]';
-
-/** Used to match leading and trailing whitespace. */
-var reTrim = /^\s+|\s+$/g;
-
-/** Used to detect bad signed hexadecimal string values. */
-var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
-
-/** Used to detect binary string values. */
-var reIsBinary = /^0b[01]+$/i;
-
-/** Used to detect octal string values. */
-var reIsOctal = /^0o[0-7]+$/i;
-
-/** Built-in method references without a dependency on `root`. */
-var freeParseInt = parseInt;
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
-
-/** Detect free variable `self`. */
-var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
-
-/** Used as a reference to the global object. */
-var root = freeGlobal || freeSelf || Function('return this')();
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/* Built-in method references for those with the same name as other `lodash` methods. */
-var nativeMax = Math.max,
-    nativeMin = Math.min;
-
-/**
- * Gets the timestamp of the number of milliseconds that have elapsed since
- * the Unix epoch (1 January 1970 00:00:00 UTC).
- *
- * @static
- * @memberOf _
- * @since 2.4.0
- * @category Date
- * @returns {number} Returns the timestamp.
- * @example
- *
- * _.defer(function(stamp) {
- *   console.log(_.now() - stamp);
- * }, _.now());
- * // => Logs the number of milliseconds it took for the deferred invocation.
- */
-var now = function() {
-  return root.Date.now();
-};
-
-/**
- * Creates a debounced function that delays invoking `func` until after `wait`
- * milliseconds have elapsed since the last time the debounced function was
- * invoked. The debounced function comes with a `cancel` method to cancel
- * delayed `func` invocations and a `flush` method to immediately invoke them.
- * Provide `options` to indicate whether `func` should be invoked on the
- * leading and/or trailing edge of the `wait` timeout. The `func` is invoked
- * with the last arguments provided to the debounced function. Subsequent
- * calls to the debounced function return the result of the last `func`
- * invocation.
- *
- * **Note:** If `leading` and `trailing` options are `true`, `func` is
- * invoked on the trailing edge of the timeout only if the debounced function
- * is invoked more than once during the `wait` timeout.
- *
- * If `wait` is `0` and `leading` is `false`, `func` invocation is deferred
- * until to the next tick, similar to `setTimeout` with a timeout of `0`.
- *
- * See [David Corbacho's article](https://css-tricks.com/debouncing-throttling-explained-examples/)
- * for details over the differences between `_.debounce` and `_.throttle`.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Function
- * @param {Function} func The function to debounce.
- * @param {number} [wait=0] The number of milliseconds to delay.
- * @param {Object} [options={}] The options object.
- * @param {boolean} [options.leading=false]
- *  Specify invoking on the leading edge of the timeout.
- * @param {number} [options.maxWait]
- *  The maximum time `func` is allowed to be delayed before it's invoked.
- * @param {boolean} [options.trailing=true]
- *  Specify invoking on the trailing edge of the timeout.
- * @returns {Function} Returns the new debounced function.
- * @example
- *
- * // Avoid costly calculations while the window size is in flux.
- * jQuery(window).on('resize', _.debounce(calculateLayout, 150));
- *
- * // Invoke `sendMail` when clicked, debouncing subsequent calls.
- * jQuery(element).on('click', _.debounce(sendMail, 300, {
- *   'leading': true,
- *   'trailing': false
- * }));
- *
- * // Ensure `batchLog` is invoked once after 1 second of debounced calls.
- * var debounced = _.debounce(batchLog, 250, { 'maxWait': 1000 });
- * var source = new EventSource('/stream');
- * jQuery(source).on('message', debounced);
- *
- * // Cancel the trailing debounced invocation.
- * jQuery(window).on('popstate', debounced.cancel);
- */
-function debounce(func, wait, options) {
-  var lastArgs,
-      lastThis,
-      maxWait,
-      result,
-      timerId,
-      lastCallTime,
-      lastInvokeTime = 0,
-      leading = false,
-      maxing = false,
-      trailing = true;
-
-  if (typeof func != 'function') {
-    throw new TypeError(FUNC_ERROR_TEXT);
-  }
-  wait = toNumber(wait) || 0;
-  if (isObject(options)) {
-    leading = !!options.leading;
-    maxing = 'maxWait' in options;
-    maxWait = maxing ? nativeMax(toNumber(options.maxWait) || 0, wait) : maxWait;
-    trailing = 'trailing' in options ? !!options.trailing : trailing;
-  }
-
-  function invokeFunc(time) {
-    var args = lastArgs,
-        thisArg = lastThis;
-
-    lastArgs = lastThis = undefined;
-    lastInvokeTime = time;
-    result = func.apply(thisArg, args);
-    return result;
-  }
-
-  function leadingEdge(time) {
-    // Reset any `maxWait` timer.
-    lastInvokeTime = time;
-    // Start the timer for the trailing edge.
-    timerId = setTimeout(timerExpired, wait);
-    // Invoke the leading edge.
-    return leading ? invokeFunc(time) : result;
-  }
-
-  function remainingWait(time) {
-    var timeSinceLastCall = time - lastCallTime,
-        timeSinceLastInvoke = time - lastInvokeTime,
-        result = wait - timeSinceLastCall;
-
-    return maxing ? nativeMin(result, maxWait - timeSinceLastInvoke) : result;
-  }
-
-  function shouldInvoke(time) {
-    var timeSinceLastCall = time - lastCallTime,
-        timeSinceLastInvoke = time - lastInvokeTime;
-
-    // Either this is the first call, activity has stopped and we're at the
-    // trailing edge, the system time has gone backwards and we're treating
-    // it as the trailing edge, or we've hit the `maxWait` limit.
-    return (lastCallTime === undefined || (timeSinceLastCall >= wait) ||
-      (timeSinceLastCall < 0) || (maxing && timeSinceLastInvoke >= maxWait));
-  }
-
-  function timerExpired() {
-    var time = now();
-    if (shouldInvoke(time)) {
-      return trailingEdge(time);
-    }
-    // Restart the timer.
-    timerId = setTimeout(timerExpired, remainingWait(time));
-  }
-
-  function trailingEdge(time) {
-    timerId = undefined;
-
-    // Only invoke if we have `lastArgs` which means `func` has been
-    // debounced at least once.
-    if (trailing && lastArgs) {
-      return invokeFunc(time);
-    }
-    lastArgs = lastThis = undefined;
-    return result;
-  }
-
-  function cancel() {
-    if (timerId !== undefined) {
-      clearTimeout(timerId);
-    }
-    lastInvokeTime = 0;
-    lastArgs = lastCallTime = lastThis = timerId = undefined;
-  }
-
-  function flush() {
-    return timerId === undefined ? result : trailingEdge(now());
-  }
-
-  function debounced() {
-    var time = now(),
-        isInvoking = shouldInvoke(time);
-
-    lastArgs = arguments;
-    lastThis = this;
-    lastCallTime = time;
-
-    if (isInvoking) {
-      if (timerId === undefined) {
-        return leadingEdge(lastCallTime);
-      }
-      if (maxing) {
-        // Handle invocations in a tight loop.
-        timerId = setTimeout(timerExpired, wait);
-        return invokeFunc(lastCallTime);
-      }
-    }
-    if (timerId === undefined) {
-      timerId = setTimeout(timerExpired, wait);
-    }
-    return result;
-  }
-  debounced.cancel = cancel;
-  debounced.flush = flush;
-  return debounced;
-}
-
-/**
- * Checks if `value` is the
- * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
- * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return !!value && (type == 'object' || type == 'function');
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is classified as a `Symbol` primitive or object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
- * @example
- *
- * _.isSymbol(Symbol.iterator);
- * // => true
- *
- * _.isSymbol('abc');
- * // => false
- */
-function isSymbol(value) {
-  return typeof value == 'symbol' ||
-    (isObjectLike(value) && objectToString.call(value) == symbolTag);
-}
-
-/**
- * Converts `value` to a number.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to process.
- * @returns {number} Returns the number.
- * @example
- *
- * _.toNumber(3.2);
- * // => 3.2
- *
- * _.toNumber(Number.MIN_VALUE);
- * // => 5e-324
- *
- * _.toNumber(Infinity);
- * // => Infinity
- *
- * _.toNumber('3.2');
- * // => 3.2
- */
-function toNumber(value) {
-  if (typeof value == 'number') {
-    return value;
-  }
-  if (isSymbol(value)) {
-    return NAN;
-  }
-  if (isObject(value)) {
-    var other = typeof value.valueOf == 'function' ? value.valueOf() : value;
-    value = isObject(other) ? (other + '') : other;
-  }
-  if (typeof value != 'string') {
-    return value === 0 ? value : +value;
-  }
-  value = value.replace(reTrim, '');
-  var isBinary = reIsBinary.test(value);
-  return (isBinary || reIsOctal.test(value))
-    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
-    : (reIsBadHex.test(value) ? NAN : +value);
-}
-
-module.exports = debounce;
-
-/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../webpack/buildin/global.js */ 3)))
-
-/***/ }),
-/* 59 */
 /*!***************************************!*\
   !*** ./node_modules/events/events.js ***!
   \***************************************/
@@ -18633,7 +18193,7 @@ function unwrapListeners(arr) {
 
 
 /***/ }),
-/* 60 */
+/* 59 */
 /*!******************************!*\
   !*** ./src/tools/migrate.js ***!
   \******************************/
@@ -18766,7 +18326,7 @@ const migrate = function () {
 /* harmony default export */ __webpack_exports__["default"] = (migrate);
 
 /***/ }),
-/* 61 */
+/* 60 */
 /*!***********************************!*\
   !*** ./src/tools/errorTracker.js ***!
   \***********************************/
@@ -18776,13 +18336,13 @@ const migrate = function () {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _getLogger__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./getLogger */ 8);
-/* harmony import */ var _tracker__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./tracker */ 62);
+/* harmony import */ var _tracker__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./tracker */ 61);
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
 
 
 
-const path = __webpack_require__(/*! path */ 63);
+const path = __webpack_require__(/*! path */ 62);
 
 const logger = Object(_getLogger__WEBPACK_IMPORTED_MODULE_0__["default"])('errorTrackerUi');
 
@@ -18906,7 +18466,7 @@ const errorTracker = new ErrorTracker();
 /* harmony default export */ __webpack_exports__["default"] = (errorTracker);
 
 /***/ }),
-/* 62 */
+/* 61 */
 /*!******************************!*\
   !*** ./src/tools/tracker.js ***!
   \******************************/
@@ -18985,7 +18545,7 @@ const tracker = new Tracker();
 /* harmony default export */ __webpack_exports__["default"] = (tracker);
 
 /***/ }),
-/* 63 */
+/* 62 */
 /*!***********************************************!*\
   !*** ./node_modules/path-browserify/index.js ***!
   \***********************************************/
@@ -19220,7 +18780,7 @@ var substr = 'ab'.substr(-1) === 'b'
 /* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../process/browser.js */ 2)))
 
 /***/ }),
-/* 64 */
+/* 63 */
 /*!********************************!*\
   !*** ./src/tools/getUserId.js ***!
   \********************************/
@@ -19234,7 +18794,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-const uuid = __webpack_require__(/*! uuid/v4 */ 65);
+const uuid = __webpack_require__(/*! uuid/v4 */ 64);
 
 let uuidCache = null;
 
@@ -19258,15 +18818,15 @@ const getUserId = () => {
 /* harmony default export */ __webpack_exports__["default"] = (getUserId);
 
 /***/ }),
-/* 65 */
+/* 64 */
 /*!*********************************!*\
   !*** ./node_modules/uuid/v4.js ***!
   \*********************************/
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-var rng = __webpack_require__(/*! ./lib/rng */ 66);
-var bytesToUuid = __webpack_require__(/*! ./lib/bytesToUuid */ 67);
+var rng = __webpack_require__(/*! ./lib/rng */ 65);
+var bytesToUuid = __webpack_require__(/*! ./lib/bytesToUuid */ 66);
 
 function v4(options, buf, offset) {
   var i = buf && offset || 0;
@@ -19297,7 +18857,7 @@ module.exports = v4;
 
 
 /***/ }),
-/* 66 */
+/* 65 */
 /*!**********************************************!*\
   !*** ./node_modules/uuid/lib/rng-browser.js ***!
   \**********************************************/
@@ -19341,7 +18901,7 @@ if (getRandomValues) {
 
 
 /***/ }),
-/* 67 */
+/* 66 */
 /*!**********************************************!*\
   !*** ./node_modules/uuid/lib/bytesToUuid.js ***!
   \**********************************************/
@@ -19375,7 +18935,7 @@ module.exports = bytesToUuid;
 
 
 /***/ }),
-/* 68 */
+/* 67 */
 /*!*******************************************!*\
   !*** ./src/tools/jsonCodeToUserscript.js ***!
   \*******************************************/
@@ -19384,9 +18944,9 @@ module.exports = bytesToUuid;
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var _convertCodeV1toV2__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./convertCodeV1toV2 */ 69);
-/* harmony import */ var _convertCodeV2toV3__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./convertCodeV2toV3 */ 70);
-/* harmony import */ var _jsonToUserscript__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./jsonToUserscript */ 71);
+/* harmony import */ var _convertCodeV1toV2__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./convertCodeV1toV2 */ 68);
+/* harmony import */ var _convertCodeV2toV3__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./convertCodeV2toV3 */ 69);
+/* harmony import */ var _jsonToUserscript__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./jsonToUserscript */ 70);
 
 
 
@@ -19408,7 +18968,7 @@ const jsonCodeToUserscript = text => {
 /* harmony default export */ __webpack_exports__["default"] = (jsonCodeToUserscript);
 
 /***/ }),
-/* 69 */
+/* 68 */
 /*!****************************************!*\
   !*** ./src/tools/convertCodeV1toV2.js ***!
   \****************************************/
@@ -19647,7 +19207,7 @@ const convertCodeV1toV2 = code => {
 /* harmony default export */ __webpack_exports__["default"] = (convertCodeV1toV2);
 
 /***/ }),
-/* 70 */
+/* 69 */
 /*!****************************************!*\
   !*** ./src/tools/convertCodeV2toV3.js ***!
   \****************************************/
@@ -19852,7 +19412,7 @@ code => {
 /* harmony default export */ __webpack_exports__["default"] = (convertCodeV2toV3);
 
 /***/ }),
-/* 71 */
+/* 70 */
 /*!***************************************!*\
   !*** ./src/tools/jsonToUserscript.js ***!
   \***************************************/
@@ -19861,7 +19421,7 @@ code => {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-const stringify = __webpack_require__(/*! json-stringify-pretty-compact */ 72);
+const stringify = __webpack_require__(/*! json-stringify-pretty-compact */ 71);
 
 const jsonToUserscript = json => {
   const meta = [];
@@ -19913,7 +19473,7 @@ const jsonToUserscript = json => {
 /* harmony default export */ __webpack_exports__["default"] = (jsonToUserscript);
 
 /***/ }),
-/* 72 */
+/* 71 */
 /*!*************************************************************!*\
   !*** ./node_modules/json-stringify-pretty-compact/index.js ***!
   \*************************************************************/
@@ -20023,7 +19583,7 @@ module.exports = function stringify(passedObj, options) {
 
 
 /***/ }),
-/* 73 */
+/* 72 */
 /*!**********************************!*\
   !*** ./src/tools/setCodeMeta.js ***!
   \**********************************/

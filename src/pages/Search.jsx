@@ -51,6 +51,7 @@ class Search extends React.Component {
   render() {
     let searchSession = null;
     if (
+      this.props.query.trim() &&
       this.rootStore.options.state === 'done' &&
       this.rootStore.history.state === 'done' &&
       this.rootStore.profiles.state === 'done' &&

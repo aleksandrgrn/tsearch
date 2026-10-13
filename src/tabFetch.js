@@ -1,4 +1,3 @@
-import {fetch} from 'whatwg-fetch';
 import 'abortcontroller-polyfill/dist/abortcontroller-polyfill-only';
 import {StatusCodeError} from "./tools/errors";
 import arrayBufferToBase64 from "./tools/arrayBufferToBase64";
@@ -19,11 +18,17 @@ const serializeError = require('serialize-error');
     return /^https?:/.test(protocol);
   };
 
-  window.tabFetch = (id, url, fetchOptions, isSameOrigin) => {
+  window.tabFetch = (id, url, fetchOptions, isSameOrigin, sessionId) => {
+    const previous = idController.get(id);
+    const controller = new AbortController();
+    idController.set(id, {controller, sessionId});
+    if (previous) previous.controller.abort();
     return Promise.resolve().then(() => {
-      const controller = new AbortController();
 
       const uri = new URL(url);
+      if (isSameOrigin && uri.host !== location.host) {
+        throw new Error('Tracker tab navigated to another host');
+      }
       if (isSameOrigin && uri.origin !== location.origin) {
         url = location.origin + url.substr(uri.origin.length);
       } else
@@ -31,49 +36,53 @@ const serializeError = require('serialize-error');
         url = location.protocol + url.substr(uri.protocol.length);
       }
 
-      const request = fetch(url, {
-        method: fetchOptions.method,
+      const method = (fetchOptions.method || 'GET').toUpperCase();
+      const options = {
+        method,
         headers: fetchOptions.headers,
-        body: fetchOptions.body,
         signal: controller.signal
-      });
-
-      idController.set(id, controller);
+      };
+      if (method !== 'GET' && method !== 'HEAD') {
+        options.body = fetchOptions.body;
+      }
+      const request = fetch(url, options);
 
       return request.then(response => {
         if (!response.ok) {
           throw new StatusCodeError(response.status, null, null, response);
         }
 
-        const {headers, ...safeResponse} = response;
-        safeResponse.headers = Array.from(headers.entries());
+        const safeResponse = {
+          url: response.url,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Array.from(response.headers.entries())
+        };
 
         return response.arrayBuffer().then(arrayBuffer => {
           return {response: safeResponse, base64: arrayBufferToBase64(arrayBuffer)};
         });
       });
     }).then(...serializeResult()).then((result) => {
+      const current = idController.get(id);
+      if (!current || current.controller !== controller) return;
+      idController.delete(id);
       chrome.runtime.sendMessage({
         id: id,
+        sessionId,
         action: 'tabFetchResponse',
         result,
       });
     });
   };
 
-  window.tabFetchAbort = (id) => {
+  window.tabFetchAbort = (id, sessionId) => {
     return Promise.resolve().then(() => {
-      const controller = idController.get(id);
-      if (controller) {
-        controller.abort();
+      const current = idController.get(id);
+      if (current && (sessionId === undefined || sessionId === current.sessionId)) {
+        current.controller.abort();
       }
     });
   };
 
-  window.stop();
-
-  const element = (document.body || document.head);
-  if (element) {
-    element.parentNode.textContent = '';
-  }
 })();

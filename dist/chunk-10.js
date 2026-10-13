@@ -3417,7 +3417,7 @@ module.exports = __webpack_require__(/*! stream */ 455);
 
 module.exports = Stream;
 
-var EE = __webpack_require__(/*! events */ 59).EventEmitter;
+var EE = __webpack_require__(/*! events */ 58).EventEmitter;
 var inherits = __webpack_require__(/*! inherits */ 456);
 
 inherits(Stream, EE);
@@ -3626,7 +3626,7 @@ var Duplex;
 Readable.ReadableState = ReadableState;
 
 /*<replacement>*/
-var EE = __webpack_require__(/*! events */ 59).EventEmitter;
+var EE = __webpack_require__(/*! events */ 58).EventEmitter;
 
 var EElistenerCount = function (emitter, type) {
   return emitter.listeners(type).length;
@@ -4672,7 +4672,7 @@ function nextTick(fn, arg1, arg2, arg3) {
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! events */ 59).EventEmitter;
+module.exports = __webpack_require__(/*! events */ 58).EventEmitter;
 
 
 /***/ }),
@@ -17198,7 +17198,7 @@ module.exports = ZipEntry;
 
 /***/ }),
 
-/***/ 59:
+/***/ 58:
 /*!***************************************!*\
   !*** ./node_modules/events/events.js ***!
   \***************************************/

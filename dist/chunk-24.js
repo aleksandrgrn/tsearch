@@ -261,7 +261,7 @@ function _defineProperty(obj, key, value) { if (key in obj) { Object.definePrope
 
 
 
-const uuid = __webpack_require__(/*! uuid/v4 */ 65);
+const uuid = __webpack_require__(/*! uuid/v4 */ 64);
 
 const Sortable = __webpack_require__(/*! sortablejs */ 600);
 

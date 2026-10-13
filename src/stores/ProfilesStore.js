@@ -1,4 +1,4 @@
-import {applyPatch, flow, isAlive, resolveIdentifier, types} from 'mobx-state-tree';
+import {applyPatch, flow, getSnapshot, isAlive, resolveIdentifier, types} from 'mobx-state-tree';
 import ProfileStore from "./ProfileStore";
 import getLogger from "../tools/getLogger";
 import storageGet from "../tools/storageGet";
@@ -142,7 +142,7 @@ const ProfilesStore = types.model('ProfilesStore', {
       return storageSet({profileId: self.profileId});
     },
     saveProfiles() {
-      return storageSet({profiles: self.profiles.toJSON()}, 'sync');
+      return storageSet({profiles: getSnapshot(self.profiles)}, 'sync');
     },
     afterCreate() {
       chrome.storage.onChanged.addListener(storageChangeListener);
@@ -158,17 +158,14 @@ const getDefaultProfile = () => {
     id: 'default',
     name: 'Default',
     trackers: [{
-      id: 'rutracker'
+      id: 'rutracker',
+      options: {enableProxy: true}
     }, {
       id: 'nnmclub'
     }, {
-      id: 'kinozal'
-    }, {
       id: 'rutor'
     }, {
-      id: 'tfile'
-    }, {
-      id: 'opentorrent'
+      id: 'tapochek'
     }]
   };
 };

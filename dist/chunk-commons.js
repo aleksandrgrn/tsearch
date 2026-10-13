@@ -16554,8 +16554,7 @@ const promiseFinally = finallyFn => {
 /***/ }),
 /* 58 */,
 /* 59 */,
-/* 60 */,
-/* 61 */
+/* 60 */
 /*!***********************************!*\
   !*** ./src/tools/errorTracker.js ***!
   \***********************************/
@@ -16565,13 +16564,13 @@ const promiseFinally = finallyFn => {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _getLogger__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./getLogger */ 8);
-/* harmony import */ var _tracker__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./tracker */ 62);
+/* harmony import */ var _tracker__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./tracker */ 61);
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
 
 
 
-const path = __webpack_require__(/*! path */ 63);
+const path = __webpack_require__(/*! path */ 62);
 
 const logger = Object(_getLogger__WEBPACK_IMPORTED_MODULE_0__["default"])('errorTrackerUi');
 
@@ -16695,7 +16694,7 @@ const errorTracker = new ErrorTracker();
 /* harmony default export */ __webpack_exports__["default"] = (errorTracker);
 
 /***/ }),
-/* 62 */
+/* 61 */
 /*!******************************!*\
   !*** ./src/tools/tracker.js ***!
   \******************************/
@@ -16774,7 +16773,7 @@ const tracker = new Tracker();
 /* harmony default export */ __webpack_exports__["default"] = (tracker);
 
 /***/ }),
-/* 63 */
+/* 62 */
 /*!***********************************************!*\
   !*** ./node_modules/path-browserify/index.js ***!
   \***********************************************/
@@ -17009,6 +17008,7 @@ var substr = 'ab'.substr(-1) === 'b'
 /* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../process/browser.js */ 2)))
 
 /***/ }),
+/* 63 */,
 /* 64 */,
 /* 65 */,
 /* 66 */,
@@ -17017,8 +17017,7 @@ var substr = 'ab'.substr(-1) === 'b'
 /* 69 */,
 /* 70 */,
 /* 71 */,
-/* 72 */,
-/* 73 */
+/* 72 */
 /*!**********************************!*\
   !*** ./src/tools/setCodeMeta.js ***!
   \**********************************/
@@ -17111,6 +17110,7 @@ const setCodeMeta = (code, meta) => {
 /* harmony default export */ __webpack_exports__["default"] = (setCodeMeta);
 
 /***/ }),
+/* 73 */,
 /* 74 */,
 /* 75 */,
 /* 76 */,
@@ -46965,7 +46965,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _tools_storageSet__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../tools/storageSet */ 10);
 /* harmony import */ var _tools_errors__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../tools/errors */ 34);
 /* harmony import */ var _tools_getLogger__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ../tools/getLogger */ 8);
-/* harmony import */ var _tools_tracker__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ../tools/tracker */ 62);
+/* harmony import */ var _tools_tracker__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ../tools/tracker */ 61);
 /* harmony import */ var _AnalyticsStore__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ./AnalyticsStore */ 296);
 
 
@@ -66757,7 +66757,7 @@ self => {
 
     saveProfiles() {
       return Object(_tools_storageSet__WEBPACK_IMPORTED_MODULE_4__["default"])({
-        profiles: self.profiles.toJSON()
+        profiles: Object(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["getSnapshot"])(self.profiles)
       }, 'sync');
     },
 
@@ -66777,17 +66777,16 @@ const getDefaultProfile = () => {
     id: 'default',
     name: 'Default',
     trackers: [{
-      id: 'rutracker'
+      id: 'rutracker',
+      options: {
+        enableProxy: true
+      }
     }, {
       id: 'nnmclub'
     }, {
-      id: 'kinozal'
-    }, {
       id: 'rutor'
     }, {
-      id: 'tfile'
-    }, {
-      id: 'opentorrent'
+      id: 'tapochek'
     }]
   };
 };
@@ -70975,7 +70974,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _tools_storageGet__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../tools/storageGet */ 9);
 /* harmony import */ var _tools_storageSet__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../tools/storageSet */ 10);
 /* harmony import */ var _tools_getHash__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../tools/getHash */ 283);
-/* harmony import */ var _tools_setCodeMeta__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../tools/setCodeMeta */ 73);
+/* harmony import */ var _tools_setCodeMeta__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../tools/setCodeMeta */ 72);
 
 
 
@@ -71050,7 +71049,7 @@ const TrackerStoreResultStore = mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["ty
           const text = await response.text();
 
           if (fileType === 'json') {
-            const jsonCodeToUserscript = (await Promise.all(/*! import() */[__webpack_require__.e(12), __webpack_require__.e(11)]).then(__webpack_require__.bind(null, /*! ../tools/jsonCodeToUserscript */ 68))).default;
+            const jsonCodeToUserscript = (await Promise.all(/*! import() */[__webpack_require__.e(12), __webpack_require__.e(11)]).then(__webpack_require__.bind(null, /*! ../tools/jsonCodeToUserscript */ 67))).default;
             return jsonCodeToUserscript(text);
           } else {
             return text;
