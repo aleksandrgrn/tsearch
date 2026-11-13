@@ -377,6 +377,13 @@ class ExKitTracker {
       }
 
       return response;
+    }, err => {
+      if (err && err.code === 'CHALLENGE_REQUIRED') {
+        // The challenged request URL itself shows the challenge; a tracker's main page may not.
+        throw new ChallengeError(this.code.auth && this.code.auth.url || options.url);
+      }
+
+      throw err;
     });
   }
 
@@ -440,6 +447,15 @@ class AuthError extends Error {
   constructor(url) {
     super('Auth required');
     this.code = 'AUTH_REQUIRED';
+    this.url = url;
+  }
+
+}
+
+class ChallengeError extends Error {
+  constructor(url) {
+    super('Challenge required');
+    this.code = 'CHALLENGE_REQUIRED';
     this.url = url;
   }
 

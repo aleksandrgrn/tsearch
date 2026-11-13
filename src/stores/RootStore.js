@@ -11,17 +11,8 @@ import TrackersStore from "./TrackersStore";
 import EditorStore from "./EditorStore";
 import CodeMakerStore from "./CodeMakerStore";
 import PageStore from "./PageStore";
-import storageGet from "../tools/storageGet";
-import getNow from "../tools/getNow";
-import storageSet from "../tools/storageSet";
-import {ErrorWithCode} from "../tools/errors";
-import getLogger from "../tools/getLogger";
 import tracker from "../tools/tracker";
 import AnalyticsStore from "./AnalyticsStore";
-
-const deserializeError = require('deserialize-error');
-
-const logger = getLogger('RootStore');
 
 let searchId = 0;
 
@@ -48,7 +39,6 @@ let searchId = 0;
  * @property {function} destroyEditor
  * @property {function} createCodeMaker
  * @property {function} destroyCodeMaker
- * @property {function} checkForUpdate
  * @property {function} afterCreate
  * @property {function} getSearch
  */
@@ -104,26 +94,6 @@ const RootStore = types.model('RootStore', {
     destroyCodeMaker() {
       self.codeMaker = null;
     },
-    checkForUpdate() {
-      checkForUpdate().then(() => {
-        return new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage({action: 'update'}, (result) => {
-            if (!result) {
-              reject(new Error('Result is empty'));
-            }
-            if (result.error) {
-              reject(deserializeError(result.error));
-            } else {
-              resolve(result.result);
-            }
-          });
-        });
-      }).catch(err => {
-        if (err.code !== 'TIMEOUT') {
-          logger.error('checkForUpdate error:', err);
-        }
-      });
-    },
     afterCreate() {
       self.page.init();
       tracker.init();
@@ -136,14 +106,5 @@ const RootStore = types.model('RootStore', {
     },
   };
 });
-
-const checkForUpdate = () => {
-  return storageGet({lastCheckUpdateAt: 0}).then(storage => {
-    if (storage.lastCheckUpdateAt + 86400 > getNow()) {
-      throw new ErrorWithCode('Timeout', 'TIMEOUT');
-    }
-    return storageSet({lastCheckUpdateAt: getNow()}).then(() => true);
-  });
-};
 
 export default RootStore;

@@ -362,6 +362,9 @@
    "login": {
       "message": "Увійти"
    },
+   "passChallenge": {
+      "message": "Пройти перевірку Cloudflare"
+   },
    "main": {
       "message": "Головна"
    },

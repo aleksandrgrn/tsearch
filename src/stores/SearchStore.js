@@ -18,6 +18,7 @@ const logger = getLogger('SearchStore');
  * @property {string} [state]
  * @property {*} nextQuery
  * @property {{url:string|undefined|null}|undefined} authRequired
+ * @property {{url:string|undefined|null}|undefined} challengeRequired
  * @property {function:Promise} searchWrapper
  * @property {function} search
  * @property {function} searchNext
@@ -31,6 +32,9 @@ const TrackerSearchStore = types.model('TrackerSearchStore', {
   state: types.optional(types.enumeration(['idle', 'pending', 'done', 'error']), 'idle'),
   nextQuery: types.frozen(),
   authRequired: types.maybe(types.model({
+    url: types.maybeNull(types.string)
+  })),
+  challengeRequired: types.maybe(types.model({
     url: types.maybeNull(types.string)
   })),
 }).actions((self) => {
@@ -72,6 +76,13 @@ const TrackerSearchStore = types.model('TrackerSearchStore', {
         if (err.code === 'AUTH_REQUIRED') {
           if (isAlive(self)) {
             self.authRequired = {
+              url: err.url
+            };
+          }
+        } else
+        if (err.code === 'CHALLENGE_REQUIRED') {
+          if (isAlive(self)) {
+            self.challengeRequired = {
               url: err.url
             };
           }

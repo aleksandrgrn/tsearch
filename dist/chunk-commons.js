@@ -14665,7 +14665,11 @@ class StatusCodeError extends Error {
     this.name = 'StatusCodeError';
     this.statusCode = statusCode;
     this.options = options;
-    this.response = response;
+    this.response = response; // Cloudflare marks interactive "Just a moment..." pages with this header.
+
+    if (response && response.headers && response.headers.get('cf-mitigated') === 'challenge') {
+      this.code = 'CHALLENGE_REQUIRED';
+    }
   }
 
 }
@@ -46960,13 +46964,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _EditorStore__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./EditorStore */ 289);
 /* harmony import */ var _CodeMakerStore__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./CodeMakerStore */ 290);
 /* harmony import */ var _PageStore__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./PageStore */ 294);
-/* harmony import */ var _tools_storageGet__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../tools/storageGet */ 9);
-/* harmony import */ var _tools_getNow__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../tools/getNow */ 48);
-/* harmony import */ var _tools_storageSet__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../tools/storageSet */ 10);
-/* harmony import */ var _tools_errors__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../tools/errors */ 34);
-/* harmony import */ var _tools_getLogger__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ../tools/getLogger */ 8);
-/* harmony import */ var _tools_tracker__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ../tools/tracker */ 61);
-/* harmony import */ var _AnalyticsStore__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ./AnalyticsStore */ 296);
+/* harmony import */ var _tools_tracker__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../tools/tracker */ 61);
+/* harmony import */ var _AnalyticsStore__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./AnalyticsStore */ 296);
 
 
 
@@ -46982,15 +46981,6 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-
-
-
-
-
-
-const deserializeError = __webpack_require__(/*! deserialize-error */ 26);
-
-const logger = Object(_tools_getLogger__WEBPACK_IMPORTED_MODULE_17__["default"])('RootStore');
 let searchId = 0;
 /**
  * @typedef {{}} RootStore
@@ -47015,7 +47005,6 @@ let searchId = 0;
  * @property {function} destroyEditor
  * @property {function} createCodeMaker
  * @property {function} destroyCodeMaker
- * @property {function} checkForUpdate
  * @property {function} afterCreate
  * @property {function} getSearch
  */
@@ -47033,7 +47022,7 @@ const RootStore = mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].model('R
   editor: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].maybeNull(_EditorStore__WEBPACK_IMPORTED_MODULE_10__["default"]),
   codeMaker: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].maybeNull(_CodeMakerStore__WEBPACK_IMPORTED_MODULE_11__["default"]),
   page: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(_PageStore__WEBPACK_IMPORTED_MODULE_12__["default"], {}),
-  analytics: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(_AnalyticsStore__WEBPACK_IMPORTED_MODULE_19__["default"], {})
+  analytics: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(_AnalyticsStore__WEBPACK_IMPORTED_MODULE_14__["default"], {})
 }).actions(
 /**RootStore*/
 self => {
@@ -47088,33 +47077,9 @@ self => {
       self.codeMaker = null;
     },
 
-    checkForUpdate() {
-      checkForUpdate().then(() => {
-        return new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage({
-            action: 'update'
-          }, result => {
-            if (!result) {
-              reject(new Error('Result is empty'));
-            }
-
-            if (result.error) {
-              reject(deserializeError(result.error));
-            } else {
-              resolve(result.result);
-            }
-          });
-        });
-      }).catch(err => {
-        if (err.code !== 'TIMEOUT') {
-          logger.error('checkForUpdate error:', err);
-        }
-      });
-    },
-
     afterCreate() {
       self.page.init();
-      _tools_tracker__WEBPACK_IMPORTED_MODULE_18__["default"].init();
+      _tools_tracker__WEBPACK_IMPORTED_MODULE_13__["default"].init();
     }
 
   };
@@ -47126,21 +47091,6 @@ self => {
 
   };
 });
-
-const checkForUpdate = () => {
-  return Object(_tools_storageGet__WEBPACK_IMPORTED_MODULE_13__["default"])({
-    lastCheckUpdateAt: 0
-  }).then(storage => {
-    if (storage.lastCheckUpdateAt + 86400 > Object(_tools_getNow__WEBPACK_IMPORTED_MODULE_14__["default"])()) {
-      throw new _tools_errors__WEBPACK_IMPORTED_MODULE_16__["ErrorWithCode"]('Timeout', 'TIMEOUT');
-    }
-
-    return Object(_tools_storageSet__WEBPACK_IMPORTED_MODULE_15__["default"])({
-      lastCheckUpdateAt: Object(_tools_getNow__WEBPACK_IMPORTED_MODULE_14__["default"])()
-    }).then(() => true);
-  });
-};
-
 /* harmony default export */ __webpack_exports__["default"] = (RootStore);
 
 /***/ }),
@@ -66949,6 +66899,7 @@ const logger = Object(_tools_getLogger__WEBPACK_IMPORTED_MODULE_1__["default"])(
  * @property {string} [state]
  * @property {*} nextQuery
  * @property {{url:string|undefined|null}|undefined} authRequired
+ * @property {{url:string|undefined|null}|undefined} challengeRequired
  * @property {function:Promise} searchWrapper
  * @property {function} search
  * @property {function} searchNext
@@ -66963,6 +66914,9 @@ const TrackerSearchStore = mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"]
   state: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].optional(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].enumeration(['idle', 'pending', 'done', 'error']), 'idle'),
   nextQuery: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].frozen(),
   authRequired: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].maybe(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].model({
+    url: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].maybeNull(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].string)
+  })),
+  challengeRequired: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].maybe(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].model({
     url: mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].maybeNull(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"].string)
   }))
 }).actions(self => {
@@ -67018,6 +66972,12 @@ const TrackerSearchStore = mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["types"]
         if (err.code === 'AUTH_REQUIRED') {
           if (Object(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["isAlive"])(self)) {
             self.authRequired = {
+              url: err.url
+            };
+          }
+        } else if (err.code === 'CHALLENGE_REQUIRED') {
+          if (Object(mobx_state_tree__WEBPACK_IMPORTED_MODULE_0__["isAlive"])(self)) {
+            self.challengeRequired = {
               url: err.url
             };
           }

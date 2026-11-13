@@ -724,7 +724,7 @@ const track = params => {
       cid: uuid,
       an: 'tms',
       aid: 'tms-v3',
-      av: "3.1.2"
+      av: "4.0.0"
     };
     return Object.assign({}, defaultParams, params);
   }).then(params => {
@@ -15423,7 +15423,11 @@ class StatusCodeError extends Error {
     this.name = 'StatusCodeError';
     this.statusCode = statusCode;
     this.options = options;
-    this.response = response;
+    this.response = response; // Cloudflare marks interactive "Just a moment..." pages with this header.
+
+    if (response && response.headers && response.headers.get('cf-mitigated') === 'challenge') {
+      this.code = 'CHALLENGE_REQUIRED';
+    }
   }
 
 }

@@ -6772,7 +6772,7 @@ let Tracker = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_0__["inject"])(
     if (trackerSearchStore) {
       if (trackerSearchStore.state === 'pending') {
         iconClassList.push('tracker__icon-loading');
-      } else if (!trackerSearchStore.authRequired && trackerSearchStore.state === 'error') {
+      } else if (!trackerSearchStore.authRequired && !trackerSearchStore.challengeRequired && trackerSearchStore.state === 'error') {
         iconClassList.push('tracker__icon-error');
       }
     }
@@ -6801,6 +6801,13 @@ let Tracker = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_0__["inject"])(
           target: "_blank",
           href: trackerSearchStore.authRequired.url,
           title: chrome.i18n.getMessage('login')
+        });
+      } else if (trackerSearchStore.challengeRequired) {
+        searchState = react__WEBPACK_IMPORTED_MODULE_1___default.a.createElement("a", {
+          className: "tracker__challenge",
+          target: "_blank",
+          href: trackerSearchStore.challengeRequired.url || tracker.meta.trackerURL,
+          title: chrome.i18n.getMessage('passChallenge')
         });
       } else {
         const count = this.searchStore.getResultCountByTrackerId(tracker.id);
@@ -25102,10 +25109,6 @@ let WhenReady = (_dec = Object(mobx_react__WEBPACK_IMPORTED_MODULE_0__["inject"]
 
   get rootStore() {
     return this.props.rootStore;
-  }
-
-  componentDidMount() {
-    this.rootStore.checkForUpdate();
   }
 
   render() {

@@ -22,10 +22,6 @@ class WhenReady extends React.Component {
     return this.props.rootStore;
   }
 
-  componentDidMount() {
-    this.rootStore.checkForUpdate();
-  }
-
   render() {
     let whenOptionsReady = null;
     if (this.rootStore.options.state === 'done') {
