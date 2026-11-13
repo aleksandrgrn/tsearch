@@ -83,6 +83,7 @@ function background(existing = true) {
       query: async () => existing ? [{id: 23, url: 'https://rutracker.org/forum/index.php'}] : [],
       create: async opts => {calls.created.push(opts); return {id: 24};},
       remove: id => calls.removed.push(id),
+      get: async id => ({id, active: false}),
     },
     scripting: {executeScript: async opts => {calls.injected.push(opts); return [{result: {result: true}}];}},
   };
@@ -220,4 +221,60 @@ test('immediate retry after cancellation selects a fresh usable tab', async () =
   assert.equal(calls.injected.find(c=>c.files).target.tabId, 24);
   bg.handleResponse(retryId, {result: {value: 'ok'}}, bg.idRequestMap.get(retryId).sessionIndex);
   assert.equal((await retry).value, 'ok');
+});
+
+async function finishOne(bg, chrome) {
+  const id = await bg.request(10, 'https://rutracker.org', 'https://rutracker.org/forum/tracker.php', {method: 'POST'});
+  const pending = bg.initRequest(id);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  bg.handleResponse(id, {result: {value: 'ok'}}, bg.idRequestMap.get(id).sessionIndex);
+  assert.equal((await pending).value, 'ok');
+  await new Promise(resolve => setTimeout(resolve, 10));
+}
+test('a tab created for the search is closed when the search is done', async () => {
+  const {bg, calls, chrome} = background(false);
+  chrome.tabs.get = async id => ({id, active: false});
+  await finishOne(bg, chrome);
+  assert.equal(calls.created.length, 1);
+  assert.deepEqual(calls.removed, [24]);
+});
+test('a created tab the user switched to is left open', async () => {
+  const {bg, calls, chrome} = background(false);
+  chrome.tabs.get = async id => ({id, active: true});
+  await finishOne(bg, chrome);
+  assert.deepEqual(calls.removed, []);
+});
+test('a new search does not reuse a created tab that is being closed', async () => {
+  const {bg, calls, chrome} = background(false);
+  let release;
+  chrome.tabs.get = id => new Promise(resolve => {release = () => resolve({id, active: false});});
+  chrome.tabs.query = async () => calls.created.length && !calls.removed.length ? [{id: 24, url: 'https://rutracker.org/'}] : [];
+  let next = 24;
+  chrome.tabs.create = async opts => {calls.created.push(opts); return {id: next++};};
+  await finishOne(bg, chrome);
+  const id = await bg.request(10, 'https://rutracker.org', 'https://rutracker.org/forum/tracker.php', {method: 'POST'});
+  bg.initRequest(id).catch(() => {});
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(calls.created.length, 2, 'the closing tab must not be picked');
+  assert.equal(calls.injected.at(-1).target.tabId, 25);
+  release();
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(calls.removed, [24]);
+  bg.abortRequest(id);
+});
+test('a created tab still used by another search of the same site is not closed', async () => {
+  const {bg, calls, chrome} = background(false);
+  chrome.tabs.query = async () => calls.created.length ? [{id: 24, url: 'https://rutracker.org/'}] : [];
+  const a = await bg.request(10, 'https://rutracker.org', 'https://rutracker.org/forum/tracker.php', {});
+  const pa = bg.initRequest(a);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  const b = await bg.request(10, 'https://rutracker.org/forum/index.php', 'https://rutracker.org/forum/tracker.php', {});
+  const pb = bg.initRequest(b);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  bg.handleResponse(a, {result: {value: 'a'}}, bg.idRequestMap.get(a).sessionIndex);
+  assert.equal((await pa).value, 'a');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(calls.removed, [], 'tab 24 is still used by the other search');
+  bg.handleResponse(b, {result: {value: 'b'}}, bg.idRequestMap.get(b).sessionIndex);
+  assert.equal((await pb).value, 'b');
 });

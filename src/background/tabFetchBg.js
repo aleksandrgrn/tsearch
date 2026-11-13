@@ -13,6 +13,7 @@ class TabFetchBg {
     this.senderTabMap = new Map();
     this.originTabMap = new Map();
     this.idRequestMap = new Map();
+    this.closingTabIds = new Set();
     this.requestIndex = 0;
 
     this.isMobile = /Mobile Safari\/(\d+)|Android (\d+)/.test(navigator.userAgent);
@@ -49,6 +50,19 @@ class TabFetchBg {
 
   deleteOriginTab(originUrl, originTab) {
     if (this.originTabMap.get(originUrl) === originTab) this.originTabMap.delete(originUrl);
+  }
+
+  // Close a tab the extension opened for a search, unless the user switched to it.
+  closeCreatedTab(tabId) {
+    this.closingTabIds.add(tabId);
+    return chrome.tabs.get(tabId).then((tab) => {
+      const inUse = [...this.originTabMap.values()].some(originTab => originTab.tabId === tabId);
+      if (!tab.active && !inUse) return chrome.tabs.remove(tabId);
+    }).catch((err) => {
+      DEBUG && logger.debug('closeCreatedTab', tabId, err);
+    }).then(() => {
+      this.closingTabIds.delete(tabId);
+    });
   }
 
   addRemovedTabListener() {
@@ -162,6 +176,7 @@ class OriginTab {
     this.tabFetchBg = tabFetchBg;
     this.originUrl = originUrl;
     this.tabId = null;
+    this.createdTabId = null;
     this.requests = [];
 
     this.tabPromise = null;
@@ -191,11 +206,14 @@ class OriginTab {
       url: new URL(this.originUrl).origin + '/*'
     }).then(tabs => {
       if (!this.requests.length) return null;
+      tabs = tabs.filter(tab => !this.tabFetchBg.closingTabIds.has(tab.id));
       if (tabs.length) return tabs[0].id;
-      return chrome.tabs.create({url: this.originUrl, active: false}).then(tab => tab.id);
+      return chrome.tabs.create({url: this.originUrl, active: false}).then(tab => this.createdTabId = tab.id);
     }).then((tabId) => {
       this.tabId = tabId;
       if (tabId !== null && this.requests.length) this.addTabUpdatedListener();
+      // All requests ended while the tab was being created.
+      if (!this.requests.length) this.closeOnIdle();
     });
   }
 
@@ -232,11 +250,17 @@ class OriginTab {
       this.tabFetchBg.deleteOriginTab(this.originUrl, this);
       this.removeTabUpdatedListener();
       this.tabFetchBg.removeRemovedTabListenerIfIdle();
+      if (this.createdTabId !== null) {
+        this.tabFetchBg.closeCreatedTab(this.createdTabId);
+        this.createdTabId = null;
+      }
     }
   }
 
   destroy() {
     DEBUG && logger.debug('OriginTab destroy', this.tabId, this.originUrl);
+    // The tab is already gone.
+    this.createdTabId = null;
     this.requests.slice(0).forEach((request) => {
       request.destroy();
     });
